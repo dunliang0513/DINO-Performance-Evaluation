@@ -1,0 +1,137 @@
+# DINO Performance Evaluation
+
+Benchmarking **DINOv2** against **DINOv3** for missing-component and defect
+detection on PCB assemblies — measuring both **accuracy** and **latency**.
+
+The concrete task: given a reference ("golden") image of a correctly assembled
+board, decide for each screw position whether the screw is **present** or
+**missing**, and find out which backbone does it better and how fast.
+
+## How the detection works
+
+No training and no labelled examples are needed at inference time. The pipeline
+is one-shot template matching on frozen self-supervised features:
+
+```
+reference image ──► pick screw ROIs ──► embed each ROI  ─┐
+                                                          ├─► cosine similarity ──► threshold ──► PRESENT / MISSING
+live frame ──► SIFT homography registration ──► crop ROIs ─┘
+```
+
+1. Capture a reference image of a known-good board.
+2. Click each screw position once to define its ROI.
+3. For every live frame, register it onto the reference with SIFT + RANSAC
+   homography, so the ROIs land in the right place even if the board shifts.
+4. Embed each ROI crop with a DINO backbone.
+5. Compare against the reference embedding by cosine similarity; below threshold
+   means the component is missing.
+
+Because the decision is a similarity score rather than a trained classifier,
+**everything rests on how good the features are** — which is exactly what this
+repo sets out to quantify.
+
+## Status
+
+**Work in progress — not yet runnable.** The design is settled and recorded in
+[the design spec](docs/superpowers/specs/2026-09-16-dinov2-v3-webcam-eval-design.md);
+implementation is proceeding in phases.
+
+What is here today is the original Basler-camera prototype, which does **not**
+run as-is. Known gaps:
+
+- `trt_feature_extractor.py` is imported by `live_detection_trt.py` but is
+  missing from the repo, so that script cannot start.
+- The prebuilt TensorRT engine was compiled for a Jetson Orin Nano and will not
+  load on other GPUs — TensorRT engines are not portable across architecture or
+  version. It is excluded from git.
+- `product_config.json` and the reference image are not committed; they are
+  generated per-setup.
+- There is no accuracy measurement yet. Adding one is the point of this work.
+
+The evaluation harness, the labelled-dataset capture tool and USB webcam support
+are being added. See the spec for the phase breakdown.
+
+## Models under evaluation
+
+| Model | Source | Dim | Patch | Weights licence |
+|---|---|---|---|---|
+| DINOv2 ViT-S/14 | `facebook/dinov2-small` | 384 | 14 | Apache-2.0 |
+| DINOv2 ViT-B/14 | `facebook/dinov2-base` | 768 | 14 | Apache-2.0 |
+| DINOv3 ViT-S/16 | `timm/vit_small_patch16_dinov3.lvd1689m` | 384 | 16 | DINOv3 Licence |
+| DINOv3 ViT-B/16 | `timm/vit_base_patch16_dinov3.lvd1689m` | 768 | 16 | DINOv3 Licence |
+
+Feature dimensions match across generations (S = 384, B = 768), so the v2-vs-v3
+comparison is like-for-like.
+
+> **Note on access:** the `facebook/dinov3-*` repositories are gated and need
+> manual approval from Meta. The `timm` mirrors above carry the same weights and
+> are **not** gated, so no approval is required to reproduce these results.
+
+## Hardware
+
+- **Developed on:** x86_64, Ubuntu 22.04, RTX 4090 Laptop (16 GB), CUDA 12.8,
+  with a USB webcam.
+- **Originally built for:** Basler industrial camera on a Jetson Orin Nano.
+- **Deployment target:** Jetson Orin Nano.
+
+Both Basler and USB webcam capture are supported through a common interface in
+`camera_source.py`. Feature extraction sits behind a pluggable backend so the
+same evaluation can run under PyTorch on a workstation and TensorRT on the Orin.
+
+Latency figures are only meaningful for the hardware they were measured on and
+will always be reported with the device stated.
+
+## Repository layout
+
+```
+camera_source.py        camera abstraction (Basler + USB webcam)
+capture_reference.py    capture the golden reference image
+select_screws.py        click screw ROIs -> product_config.json
+live_detection_trt.py   original Orin/TensorRT live demo (currently broken)
+docs/superpowers/specs/ design documents
+```
+
+## Licence
+
+The code in this repository is licensed under the
+**[Apache License 2.0](LICENSE)**.
+
+Model weights are **not** redistributed here — they are downloaded from Hugging
+Face at runtime and remain under their own licences:
+
+- **DINOv2** — Apache-2.0.
+- **DINOv3** — [Meta DINOv3 Licence](https://huggingface.co/timm/vit_small_patch16_dinov3.lvd1689m/blob/main/LICENSE.md),
+  a custom licence, *not* Apache-2.0. If you use the DINOv3 weights, read it:
+  it carries redistribution conditions, use restrictions, and an obligation to
+  acknowledge DINO materials when publishing results derived from them.
+
+## Acknowledgements
+
+This work evaluates DINO models released by Meta AI.
+
+```bibtex
+@article{oquab2023dinov2,
+  title={DINOv2: Learning Robust Visual Features without Supervision},
+  author={Oquab, Maxime and Darcet, Timoth{\'e}e and Moutakanni, Th{\'e}o and others},
+  journal={arXiv preprint arXiv:2304.07193},
+  year={2023}
+}
+
+@article{simeoni2025dinov3,
+  title={DINOv3},
+  author={Sim{\'e}oni, Oriane and Vo, Huy V and Seitzer, Maximilian and Baldassarre, Federico and Oquab, Maxime and Jose, Cijo and Khalidov, Vasil and Szafraniec, Marc and Yi, Seungeun and Ramamonjisoa, Micha{\"e}l and others},
+  journal={arXiv preprint arXiv:2508.10104},
+  year={2025}
+}
+```
+
+DINOv3 weights are accessed via [`timm`](https://github.com/huggingface/pytorch-image-models)
+(Ross Wightman).
+
+## Scope and caveats
+
+This measures the accuracy of **this pipeline** — one-shot template matching on
+frozen DINO features — not the accuracy of DINOv2 or DINOv3 in the abstract.
+Results will not carry over to a fine-tuned classifier built on the same
+backbone, and they are specific to the parts, optics and lighting used to
+capture the dataset.

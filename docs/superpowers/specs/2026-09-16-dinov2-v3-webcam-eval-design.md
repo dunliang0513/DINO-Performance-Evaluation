@@ -16,7 +16,7 @@ Basler camera the repo was originally built around.
 | Accuracy method | Labeled dataset + offline scoring harness |
 | Latency target | This laptop (RTX 4090) now; Orin Nano later via pluggable backend |
 | Models | dinov2-small, dinov2-base, dinov3-small, dinov3-base |
-| Test object | PCB with physically removable screws |
+| Test object | PCB with 4-5 physically removable screws |
 | Capture protocol | Pose + lighting variation |
 | Code structure | Shared modules + thin scripts |
 
@@ -143,10 +143,22 @@ results/<name>/
 
 ### Expected dataset size
 
-4 screws x 5 board configs (all-present, plus each screw removed) x 3 lighting
-conditions x 40 frames = **600 frames -> 2,400 labeled ROI samples**
-(~480 missing, ~1,920 present), since every frame labels all four ROIs at once.
-Roughly 20-30 minutes of hands-on capture.
+The board has **4-5 screws** (`N`). Nothing hardcodes the count: the capture
+tool reads `N` from `product_config.json` and generates `N + 1` board configs
+(all-present, plus each screw removed in turn).
+
+Frames = `(N + 1) x LIGHTING_CONDITIONS x FRAMES_PER_BURST`, and every frame
+labels all `N` ROIs at once, so ROI samples = `N x frames`.
+
+| N screws | Configs | Frames | ROI samples | Missing | Present |
+|---|---|---|---|---|---|
+| 4 | 5 | 600 | 2,400 | 480 | 1,920 |
+| 5 | 6 | 720 | 3,600 | 600 | 3,000 |
+
+(at `LIGHTING_CONDITIONS = 3`, `FRAMES_PER_BURST = 40`)
+
+Either size gives enough missing-class samples for tight AUROC confidence
+intervals. Roughly 20-35 minutes of hands-on capture.
 
 ## Metrics
 
