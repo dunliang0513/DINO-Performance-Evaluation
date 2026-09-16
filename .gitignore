@@ -1,0 +1,16 @@
+# Model binaries - large, and the .engine is hardware-specific (Orin Nano, SM 8.7)
+*.engine
+*.onnx
+
+# Captured data and results
+datasets/
+results/
+*.jpg
+*.png
+!docs/**/*.png
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
