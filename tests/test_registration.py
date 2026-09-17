@@ -58,3 +58,27 @@ def test_unregisterable_frame_returns_none(synthetic_board):
 
     assert homography is None
     assert inlier_count == 0
+
+
+def test_registration_is_deterministic(synthetic_board):
+    """The same frame must always produce the same homography.
+
+    FLANN's kd-tree matching is approximate and randomised, so registering one
+    frame repeatedly returned different results -- 3.1 px of corner jitter on a
+    real board. That is not merely cosmetic: the ROI crop lands a few pixels
+    differently each time, and on a 32 px crop 3 px is a tenth of the window.
+    Every similarity score downstream inherits that noise.
+    """
+    registrar = Registrar(synthetic_board, match_scale=0.5)
+    warped = _warp(synthetic_board, angle_degrees=2.0, scale=1.01,
+                   shift_x=8, shift_y=-5)
+
+    first, first_inliers = registrar.register(warped)
+    assert first is not None
+
+    for _ in range(5):
+        again, again_inliers = registrar.register(warped)
+
+        assert again is not None
+        assert again_inliers == first_inliers
+        np.testing.assert_allclose(again, first, rtol=0, atol=0)

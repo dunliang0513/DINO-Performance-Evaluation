@@ -56,10 +56,23 @@ class Registrar:
                 "blank, out of focus, or badly exposed."
             )
 
-        self.matcher = cv2.FlannBasedMatcher(
-            dict(algorithm=1, trees=5),
-            dict(checks=50),
-        )
+        # Brute force rather than FLANN, for two reasons.
+        #
+        # FLANN's kd-tree search is approximate and randomised: matching the
+        # same frame twice returned a different match set each time, which
+        # moved the fitted homography by 3.1 px std and 8.8 px peak-to-peak.
+        # A perfectly still board therefore appeared to shift on screen every
+        # time registration ran, and -- worse -- an ROI crop landed a few
+        # pixels differently each time, injecting noise into every similarity
+        # score downstream. On a 32 px crop, 3 px is a tenth of the ROI.
+        #
+        # It is also faster here. At this scale (order 1e3 keypoints) building
+        # the kd-tree index costs more than an exact search: 13.6 ms against
+        # 26.8 ms per frame, measured on a 1920x1080 board at MATCH_SCALE 0.25.
+        #
+        # NORM_L2 is the correct metric for SIFT's float descriptors, and is
+        # BFMatcher's default.
+        self.matcher = cv2.BFMatcher()
 
         scale_matrix = np.array(
             [[self.match_scale, 0, 0], [0, self.match_scale, 0], [0, 0, 1]],
