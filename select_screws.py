@@ -173,7 +173,7 @@ def screw_setting(number, key, default):
 
     return default
 
-config = {
+config_data = {
     "reference_path": REFERENCE_PATH,
     "screws": [
         {
@@ -195,6 +195,6 @@ config = {
 }
 
 with open(CONFIG_PATH, "w", encoding="utf-8") as config_file:
-    json.dump(config, config_file, indent=2)
+    json.dump(config_data, config_file, indent=2)
 
 print(f"Saved product configuration: {CONFIG_PATH}")
