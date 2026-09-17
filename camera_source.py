@@ -35,11 +35,45 @@ class UsbCamera:
                 f"{self.width}x{self.height}."
             )
 
+        if config.LOCK_CAMERA_CONTROLS:
+            self._lock_controls()
+
         # Discard the first frames while auto-exposure and white balance settle.
         for _ in range(warmup_frames):
             self.camera.read()
 
         self.name = f"USB camera {index} ({self.width}x{self.height})"
+
+    def _lock_controls(self):
+        """Pin focus, exposure and white balance so captures stay comparable.
+
+        A reference image and a live frame are only comparable if the camera
+        treats them the same way. Continuous autofocus in particular will
+        refocus between the two, and the resulting blur shifts embeddings more
+        than the defect being looked for.
+
+        Cameras that do not expose a given control simply return False, which
+        is reported rather than raised: a webcam without manual focus is still
+        usable, just less reliable.
+        """
+        settings = [
+            ("autofocus", cv2.CAP_PROP_AUTOFOCUS, 0),
+            ("focus", cv2.CAP_PROP_FOCUS, config.FOCUS_ABSOLUTE),
+            ("auto exposure", cv2.CAP_PROP_AUTO_EXPOSURE, 1),
+            ("auto white balance", cv2.CAP_PROP_AUTO_WB, 0),
+        ]
+
+        refused = [
+            name
+            for name, prop, value in settings
+            if not self.camera.set(prop, value)
+        ]
+
+        if refused:
+            print(
+                f"Warning: this camera refused to lock {', '.join(refused)}. "
+                f"Reference and live frames may not stay comparable."
+            )
 
     def read(self):
         return self.camera.read()

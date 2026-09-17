@@ -39,6 +39,18 @@ USB_CAMERA_INDEX = _int("USB_CAMERA_INDEX", 2)
 FRAME_WIDTH = _int("FRAME_WIDTH", 1920)
 FRAME_HEIGHT = _int("FRAME_HEIGHT", 1080)
 ROTATE_180 = _bool("ROTATE_180", False)
+# Auto focus / exposure / white balance drift between the reference capture and
+# inference, and that drift changes DINO embeddings MORE than a missing screw
+# does. Measured on a Logitech BRIO: autofocus hunting left a live frame at 8%
+# of the reference's sharpness, which alone pushed an intact ROI's score to
+# 0.54 - the same score a genuinely removed screw produced. Locking these is
+# not a nicety; without it the comparison is meaningless.
+LOCK_CAMERA_CONTROLS = _bool("LOCK_CAMERA_CONTROLS", True)
+# Fixed focus position, in the camera's own units. This is specific to the
+# working distance between camera and board: re-run `python tune_camera.py`
+# whenever either moves.
+FOCUS_ABSOLUTE = _int("FOCUS_ABSOLUTE", 20)
+
 BASLER_SERIAL = _str("BASLER_SERIAL", "")
 BASLER_TIMEOUT_MS = _int("BASLER_TIMEOUT_MS", 2000)
 
@@ -57,7 +69,12 @@ RANSAC_REPROJECTION_THRESHOLD = _float("RANSAC_REPROJECTION_THRESHOLD", 5.0)
 # --- Detection --------------------------------------------------------------
 DETECTION_INTERVAL = _int("DETECTION_INTERVAL", 2)
 DEBOUNCE_COUNT = _int("DEBOUNCE_COUNT", 3)
-DEFAULT_CROP_SIZE = _int("DEFAULT_CROP_SIZE", 80)
+# The ROI crop must be tight enough that the component dominates it. At 80 px
+# on a 1080p board the screw is a small fraction of the crop, so removing it
+# barely changes the embedding: measured d-prime 0.54, i.e. not separable. At
+# 32 px the same defect separates cleanly at d-prime 5.9. Bigger is emphatically
+# not safer here - at 120 px the ranking inverts.
+DEFAULT_CROP_SIZE = _int("DEFAULT_CROP_SIZE", 32)
 DEFAULT_SIMILARITY_THRESHOLD = _float("DEFAULT_SIMILARITY_THRESHOLD", 0.75)
 
 # --- Model ------------------------------------------------------------------

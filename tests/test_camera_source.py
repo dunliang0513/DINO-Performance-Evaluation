@@ -3,14 +3,16 @@ import numpy as np
 import pytest
 
 import camera_source
+import config
 
 
 class FakeCapture:
     """Stand-in for cv2.VideoCapture that records the calls made to it."""
 
-    def __init__(self, index, opened=True, granted=(1920, 1080)):
+    def __init__(self, index, opened=True, granted=(1920, 1080), refuse=False):
         self.index = index
         self.opened = opened
+        self.refuse = refuse
         self.granted_width, self.granted_height = granted
         self.calls = []
         self.released = False
@@ -21,7 +23,7 @@ class FakeCapture:
 
     def set(self, prop, value):
         self.calls.append((prop, value))
-        return True
+        return not self.refuse
 
     def get(self, prop):
         if prop == cv2.CAP_PROP_FRAME_WIDTH:
@@ -85,3 +87,41 @@ def test_warns_when_resolution_is_not_granted(fake_capture, capsys):
 def test_flushes_warmup_frames(fake_capture):
     camera_source.UsbCamera(0, 1920, 1080, warmup_frames=5)
     assert fake_capture["capture"].read_count == 5
+
+
+def test_locks_focus_exposure_and_white_balance(fake_capture):
+    """Auto controls drift between reference capture and inference.
+
+    Measured on a BRIO: autofocus hunting left a live frame at 8% of the
+    reference's sharpness, which alone dropped an intact ROI to 0.54 -- the
+    same score a genuinely removed screw produced. If these are not pinned,
+    the similarity comparison measures camera state, not screw presence.
+    """
+    camera_source.UsbCamera(0, 1920, 1080)
+    props = dict(fake_capture["capture"].calls)
+
+    assert props.get(cv2.CAP_PROP_AUTOFOCUS) == 0, "autofocus must be disabled"
+    assert props.get(cv2.CAP_PROP_FOCUS) == config.FOCUS_ABSOLUTE
+    assert cv2.CAP_PROP_AUTO_EXPOSURE in props, "exposure must be pinned"
+    assert props.get(cv2.CAP_PROP_AUTO_WB) == 0, "white balance must be pinned"
+
+
+def test_control_locking_can_be_disabled(fake_capture, monkeypatch):
+    monkeypatch.setattr(config, "LOCK_CAMERA_CONTROLS", False)
+
+    camera_source.UsbCamera(0, 1920, 1080)
+    props = dict(fake_capture["capture"].calls)
+
+    assert cv2.CAP_PROP_AUTOFOCUS not in props
+
+
+def test_warns_but_survives_a_camera_that_refuses_the_controls(
+    fake_capture, capsys
+):
+    """A webcam without manual focus is still usable, just less reliable."""
+    fake_capture["kwargs"] = {"refuse": True}
+
+    camera = camera_source.UsbCamera(0, 1920, 1080)
+
+    assert camera.name, "construction must still succeed"
+    assert "refused to lock" in capsys.readouterr().out
