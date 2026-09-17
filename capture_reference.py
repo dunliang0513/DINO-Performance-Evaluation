@@ -1,35 +1,13 @@
 import time
+
 import cv2
 
+import config
 from camera_source import create_camera
 
+OUTPUT_PATH = config.REFERENCE_PATH
 
-CAMERA_BACKEND = "basler"
-ROTATE_180 = True
-OUTPUT_PATH = "my_photo-1.jpg"
-
-FRAME_WIDTH = 1920
-FRAME_HEIGHT = 1080
-
-USB_CAMERA_INDEX = 4
-BASLER_SERIAL = ""
-BASLER_TIMEOUT_MS = 2000
-
-PREVIEW_MAX_WIDTH = 1280
-PREVIEW_MAX_HEIGHT = 720
-
-
-camera = create_camera(
-    backend=CAMERA_BACKEND,
-    usb_index=USB_CAMERA_INDEX,
-    usb_width=FRAME_WIDTH,
-    usb_height=FRAME_HEIGHT,
-    basler_serial=BASLER_SERIAL,
-    basler_timeout_ms=BASLER_TIMEOUT_MS,
-    basler_width=FRAME_WIDTH,
-    basler_height=FRAME_HEIGHT,
-    rotate_180=ROTATE_180
-)
+camera = create_camera()
 
 print(f"Using camera: {camera.name}")
 print("Press SPACE to save the reference image.")
@@ -46,8 +24,8 @@ try:
 
         height, width = frame.shape[:2]
         preview_scale = min(
-            PREVIEW_MAX_WIDTH / width,
-            PREVIEW_MAX_HEIGHT / height,
+            config.PREVIEW_MAX_WIDTH / width,
+            config.PREVIEW_MAX_HEIGHT / height,
             1.0
         )
 
