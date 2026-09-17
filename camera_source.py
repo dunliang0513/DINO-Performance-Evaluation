@@ -60,6 +60,7 @@ class UsbCamera:
             ("autofocus", cv2.CAP_PROP_AUTOFOCUS, 0),
             ("focus", cv2.CAP_PROP_FOCUS, config.FOCUS_ABSOLUTE),
             ("auto exposure", cv2.CAP_PROP_AUTO_EXPOSURE, 1),
+            ("exposure", cv2.CAP_PROP_EXPOSURE, config.EXPOSURE_ABSOLUTE),
             ("auto white balance", cv2.CAP_PROP_AUTO_WB, 0),
         ]
 

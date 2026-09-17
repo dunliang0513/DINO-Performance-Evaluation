@@ -50,6 +50,15 @@ LOCK_CAMERA_CONTROLS = _bool("LOCK_CAMERA_CONTROLS", True)
 # working distance between camera and board: re-run `python tune_camera.py`
 # whenever either moves.
 FOCUS_ABSOLUTE = _int("FOCUS_ABSOLUTE", 20)
+# Fixed exposure time, in the camera's own units. Switching a UVC camera to
+# manual exposure pins whatever value it happens to hold, which is usually far
+# too dark -- on a BRIO it produced a mean brightness of 70 where auto gave 124.
+# Reading the value back from auto mode does not help either: in Aperture
+# Priority the camera also trims gain internally, so the reported exposure does
+# not describe the resulting image. The value has to be measured against actual
+# brightness, which is what `python tune_camera.py` does. Scene-dependent:
+# re-run it whenever the lighting changes.
+EXPOSURE_ABSOLUTE = _int("EXPOSURE_ABSOLUTE", 420)
 
 BASLER_SERIAL = _str("BASLER_SERIAL", "")
 BASLER_TIMEOUT_MS = _int("BASLER_TIMEOUT_MS", 2000)

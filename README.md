@@ -83,12 +83,17 @@ python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 Then set up a product and run detection:
 
 ```bash
-python tune_camera.py           # find the sharpest fixed focus, then set it
+python tune_camera.py           # find the best fixed focus AND exposure, then set them
 python capture_reference.py     # SPACE saves a golden reference image, Q quits
 python select_screws.py         # click each screw, S saves, Q cancels
 python calibrate.py             # measure each ROI's normal range (board COMPLETE)
 python live_detection.py --model dinov2-small
 ```
+
+Re-run `tune_camera.py` whenever the camera moves or the lighting changes, and
+**re-capture the reference afterwards**. Reference and live frames must share
+the same focus and exposure: a dark reference against a correctly-exposed live
+frame halved the separation margin in testing (+0.127 to +0.056).
 
 `calibrate.py` is not optional polish. Each ROI has a genuinely different
 normal range -- measured on a real board, a corner ROI drifted 0.740-0.911
@@ -158,7 +163,7 @@ backends/               pluggable feature extractors (DINOv2, DINOv3)
 capture_reference.py    capture the golden reference image
 select_screws.py        click screw ROIs -> product_config.json
 live_detection.py       live detection, selectable DINO backend
-tune_camera.py          sweep for the sharpest fixed focus
+tune_camera.py          sweep for the best fixed focus and exposure
 calibrate.py            learn each ROI's normal range from a good board
 tests/                  hardware-free test suite
 pytest.ini              pytest configuration

@@ -125,3 +125,17 @@ def test_warns_but_survives_a_camera_that_refuses_the_controls(
 
     assert camera.name, "construction must still succeed"
     assert "refused to lock" in capsys.readouterr().out
+
+
+def test_pins_an_explicit_exposure_value(fake_capture):
+    """Manual exposure without a value is worse than leaving it automatic.
+
+    Switching a UVC camera to manual mode pins whatever exposure it happens to
+    be holding. On a BRIO that produced mean brightness 70 where auto gave 124
+    -- dark enough to change every embedding. Setting the mode is not enough;
+    the value has to be set too.
+    """
+    camera_source.UsbCamera(0, 1920, 1080)
+    props = dict(fake_capture["capture"].calls)
+
+    assert props.get(cv2.CAP_PROP_EXPOSURE) == config.EXPOSURE_ABSOLUTE
