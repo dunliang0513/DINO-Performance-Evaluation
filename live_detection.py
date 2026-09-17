@@ -9,7 +9,6 @@ import json
 import time
 
 import cv2
-import numpy as np
 import torch
 
 import config
@@ -17,6 +16,7 @@ from backends import AVAILABLE_MODELS, get_backend
 from camera_source import create_camera
 from registration import Registrar
 from roi import crop_square_with_padding
+from scoring import Debouncer, score_rois
 
 SMOOTHING = 0.1
 
@@ -117,9 +117,7 @@ def main():
     print("Press Q to quit.")
 
     scores = [None] * len(points)
-    states = ["UNKNOWN"] * len(points)
-    low_counts = [0] * len(points)
-    high_counts = [0] * len(points)
+    debouncer = Debouncer(thresholds, config.DEBOUNCE_COUNT)
 
     homography = None
     inlier_count = 0
@@ -176,9 +174,7 @@ def main():
                 # showing the previous board's verdict for up to
                 # DEBOUNCE_COUNT * DETECTION_INTERVAL frames after re-acquiring.
                 scores = [None] * len(points)
-                states = ["UNKNOWN"] * len(points)
-                low_counts = [0] * len(points)
-                high_counts = [0] * len(points)
+                debouncer.reset()
             else:
                 aligned = registrar.warp(frame, homography)
                 display = aligned.copy()
@@ -202,29 +198,13 @@ def main():
                         dino_ms, (time.perf_counter() - dino_start) * 1000
                     )
 
-                    # Both sides are unit-norm, so the dot product is the cosine.
-                    scores = np.sum(
-                        reference_features * query_features, axis=1
+                    scores = score_rois(
+                        reference_features, query_features
                     ).tolist()
-
-                    for index, score in enumerate(scores):
-                        if score < thresholds[index]:
-                            low_counts[index] += 1
-                            high_counts[index] = 0
-
-                            if low_counts[index] >= config.DEBOUNCE_COUNT:
-                                states[index] = "MISSING"
-                                low_counts[index] = config.DEBOUNCE_COUNT
-                        else:
-                            high_counts[index] += 1
-                            low_counts[index] = 0
-
-                            if high_counts[index] >= config.DEBOUNCE_COUNT:
-                                states[index] = "PRESENT"
-                                high_counts[index] = config.DEBOUNCE_COUNT
+                    debouncer.update(scores)
 
                 for number, ((x, y), size, score, state) in enumerate(
-                    zip(points, sizes, scores, states), start=1
+                    zip(points, sizes, scores, debouncer.states), start=1
                 ):
                     half = size // 2
 
