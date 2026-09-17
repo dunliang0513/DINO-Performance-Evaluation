@@ -1,34 +1,17 @@
 import json
 import cv2
 from camera_source import create_camera
+import config
 
-CONFIG_PATH = "product_config.json"
-REFERENCE_PATH = "my_photo-1.jpg"
+CONFIG_PATH = config.CONFIG_PATH
+REFERENCE_PATH = config.REFERENCE_PATH
 CAPTURE_NEW_REFERENCE = False
-DEFAULT_CROP_SIZE = 80
-DEFAULT_SIMILARITY_THRESHOLD = 0.75
-
-CAMERA_BACKEND = "basler"
-ROTATE_180 = True
-USB_CAMERA_INDEX = 4
-USB_WIDTH = 1920
-USB_HEIGHT = 1080
-BASLER_SERIAL = ""
-BASLER_TIMEOUT_MS = 2000
+DEFAULT_CROP_SIZE = config.DEFAULT_CROP_SIZE
+DEFAULT_SIMILARITY_THRESHOLD = config.DEFAULT_SIMILARITY_THRESHOLD
 
 
 def capture_reference():
-    camera = create_camera(
-        backend=CAMERA_BACKEND,
-        usb_index=USB_CAMERA_INDEX,
-        usb_width=USB_WIDTH,
-        usb_height=USB_HEIGHT,
-        basler_serial=BASLER_SERIAL,
-        basler_timeout_ms=BASLER_TIMEOUT_MS,
-        basler_width=USB_WIDTH,
-        basler_height=USB_HEIGHT,
-        rotate_180=ROTATE_180
-    )
+    camera = create_camera()
 
     print(f"Using camera: {camera.name}")
     print("Press SPACE to save the reference image or Q to cancel.")
