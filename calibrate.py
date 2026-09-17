@@ -34,6 +34,55 @@ from roi import crop_square_with_padding
 from scoring import calibrated_threshold, score_rois
 
 
+# An ROI whose baseline sits this far below the median is almost certainly not
+# just a harder ROI. Measured on a real board, simulated pose change (3 degrees
+# of rotation, 15 px of shift, 2% of scale) moved any ROI by at most 0.09,
+# while a hand entering frame over an ROI cost 0.26.
+SUSPECT_BASELINE_GAP = 0.15
+
+
+def _warn_about_suspect_baselines(screws, scores):
+    """Flag ROIs whose learned "normal" looks like it captured a problem.
+
+    Calibration is trusting by nature: whatever it sees, it learns as normal.
+    Calibrate with a screw missing and that ROI's baseline becomes the missing
+    state, so the defect can never be flagged again. The same happens if a hand
+    or its shadow crosses an ROI during the run.
+
+    Comparing each baseline against the median across ROIs catches both,
+    because a genuine defect or occlusion drops one ROI far below its peers.
+    """
+    means = np.array([screw["baseline_mean"] for screw in screws])
+    median = float(np.median(means))
+
+    suspects = [
+        (screw, mean)
+        for screw, mean in zip(screws, means)
+        if median - mean > SUSPECT_BASELINE_GAP
+    ]
+
+    if not suspects:
+        print("\nAll baselines are consistent with each other.")
+        return
+
+    print(
+        f"\nWARNING: {len(suspects)} ROI(s) learned a baseline far below the "
+        f"median of {median:.3f}:"
+    )
+
+    for screw, mean in suspects:
+        print(f"    S{screw['id']}: {mean:.3f}")
+
+    print(
+        "\nThat usually means the component was missing during calibration, "
+        "or something crossed the ROI -- a hand, or its shadow. Either way the "
+        "problem has been learned as normal, and those ROIs will no longer "
+        "report a defect.\n"
+        "Re-run with every component present and nothing entering frame. To "
+        "vary the pose, nudge the board from outside the camera's view."
+    )
+
+
 def main():
     with open(config.CONFIG_PATH, "r", encoding="utf-8") as handle:
         product = json.load(handle)
@@ -127,15 +176,7 @@ def main():
             f"{column.min():7.3f} {threshold:10.3f}"
         )
 
-    lowest = scores.min()
-
-    if lowest < 0.5:
-        print(
-            f"\nWarning: an ROI dipped to {lowest:.3f} during calibration. "
-            f"That usually means a component was missing, or an ROI is badly "
-            f"centred. Calibrating on an incomplete board bakes the defect in "
-            f"as normal."
-        )
+    _warn_about_suspect_baselines(screws, scores)
 
     product["calibration"] = {
         "frames": len(scores),

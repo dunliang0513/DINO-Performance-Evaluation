@@ -19,6 +19,7 @@ from roi import crop_square_with_padding
 from scoring import Debouncer, score_rois, thresholds_from_config
 
 SMOOTHING = 0.1
+WINDOW_NAME = "Live Detection"
 
 
 def parse_arguments():
@@ -31,6 +32,31 @@ def parse_arguments():
     )
     parser.add_argument("--device", default=config.DEVICE)
     return parser.parse_args()
+
+
+def fit_preview(image, max_width, max_height):
+    """Scale `image` to fit the box while preserving its aspect ratio.
+
+    The previous code passed the preview size straight to cv2.resize as an
+    exact target, which stretched anything that was not 16:9 and upscaled small
+    frames. That matters more now the window is resizable: a distorted preview
+    misrepresents where the ROI boxes actually sit.
+    """
+    height, width = image.shape[:2]
+    scale = min(max_width / width, max_height / height, 1.0)
+
+    if scale >= 1.0:
+        return image
+
+    return cv2.resize(image, (int(width * scale), int(height * scale)))
+
+
+def set_fullscreen(enabled):
+    cv2.setWindowProperty(
+        WINDOW_NAME,
+        cv2.WND_PROP_FULLSCREEN,
+        cv2.WINDOW_FULLSCREEN if enabled else cv2.WINDOW_NORMAL,
+    )
 
 
 def smooth(previous, current):
@@ -129,10 +155,18 @@ def main():
 
     camera = create_camera()
     print(f"Camera: {camera.name}")
-    print("Press Q to quit.")
+    print("Press F to toggle fullscreen, Q to quit.")
 
     scores = [None] * len(points)
     debouncer = Debouncer(thresholds, config.DEBOUNCE_COUNT)
+
+    # WINDOW_KEEPRATIO stops the frame stretching when the window is resized
+    # or made fullscreen on a monitor with a different aspect ratio.
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    cv2.resizeWindow(
+        WINDOW_NAME, config.PREVIEW_MAX_WIDTH, config.PREVIEW_MAX_HEIGHT
+    )
+    fullscreen = False
 
     homography = None
     inlier_count = 0
@@ -263,14 +297,36 @@ def main():
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2,
             )
 
-            preview = cv2.resize(
-                display,
-                (config.PREVIEW_MAX_WIDTH, config.PREVIEW_MAX_HEIGHT),
-            )
-            cv2.imshow("Live Detection", preview)
+            # In fullscreen the window manager decides the size, so hand over
+            # the full-resolution frame and let OpenCV scale it -- downscaling
+            # first would throw away detail the larger window could show.
+            if fullscreen:
+                cv2.imshow(WINDOW_NAME, display)
+            else:
+                cv2.imshow(
+                    WINDOW_NAME,
+                    fit_preview(
+                        display,
+                        config.PREVIEW_MAX_WIDTH,
+                        config.PREVIEW_MAX_HEIGHT,
+                    ),
+                )
 
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            key = cv2.waitKey(1) & 0xFF
+
+            if key == ord("q"):
                 break
+
+            if key == ord("f"):
+                fullscreen = not fullscreen
+                set_fullscreen(fullscreen)
+
+                if not fullscreen:
+                    cv2.resizeWindow(
+                        WINDOW_NAME,
+                        config.PREVIEW_MAX_WIDTH,
+                        config.PREVIEW_MAX_HEIGHT,
+                    )
     finally:
         camera.release()
         cv2.destroyAllWindows()
