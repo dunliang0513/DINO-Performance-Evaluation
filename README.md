@@ -56,6 +56,18 @@ Notes:
 
 Requires Python 3.10, an NVIDIA GPU with CUDA 12.8, and a USB webcam.
 
+The default camera is `USB_CAMERA_INDEX=2`. Check which index is which with
+`v4l2-ctl --list-devices`, then confirm per node, since that command groups
+several cameras under one bus path:
+
+```bash
+for n in 0 2 4; do echo -n "video$n: "; v4l2-ctl -d /dev/video$n --info | grep 'Card type'; done
+```
+
+V4L2 indices are assigned in enumeration order and can shift between boots or
+USB ports, so re-check after replugging — a silent change would mean captures
+came from a different camera than the reference.
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -83,7 +95,7 @@ variable of the same name, so no script needs editing to change camera or
 threshold:
 
 ```bash
-USB_CAMERA_INDEX=2 MATCH_SCALE=0.5 python live_detection.py --model dinov3-small
+USB_CAMERA_INDEX=0 MATCH_SCALE=0.5 python live_detection.py --model dinov3-small
 ```
 
 ### Tests

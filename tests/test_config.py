@@ -16,7 +16,8 @@ def test_defaults_target_the_usb_webcam():
     importlib.reload(config)
 
     assert config.CAMERA_BACKEND == "usb"
-    assert config.USB_CAMERA_INDEX == 0
+    # The external BRIO, not the laptop's built-in webcam at index 0.
+    assert config.USB_CAMERA_INDEX == 2
     # The 180-degree rotation was a Basler mounting artifact, not a scene property.
     assert config.ROTATE_180 is False
 

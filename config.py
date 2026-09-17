@@ -31,7 +31,11 @@ def _bool(name, default):
 # --- Camera -----------------------------------------------------------------
 # Default is the USB webcam; the Basler path is retained for the Orin rig.
 CAMERA_BACKEND = _str("CAMERA_BACKEND", "usb")
-USB_CAMERA_INDEX = _int("USB_CAMERA_INDEX", 0)
+# Index 2 is the external Logitech BRIO; index 0 is the laptop's built-in
+# webcam. Verify with `v4l2-ctl --list-devices` after replugging - V4L2 index
+# numbers are assigned in enumeration order and can shift between boots or
+# USB ports, which would silently change which camera a capture came from.
+USB_CAMERA_INDEX = _int("USB_CAMERA_INDEX", 2)
 FRAME_WIDTH = _int("FRAME_WIDTH", 1920)
 FRAME_HEIGHT = _int("FRAME_HEIGHT", 1080)
 ROTATE_180 = _bool("ROTATE_180", False)
