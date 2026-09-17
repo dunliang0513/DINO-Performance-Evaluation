@@ -82,3 +82,41 @@ class Debouncer:
                     self.states[index] = PRESENT
 
         return list(self.states)
+
+
+def calibrated_threshold(baseline_mean, baseline_std, sigma, minimum_std):
+    """Turn one ROI's measured normal range into a decision threshold.
+
+    An ROI is judged against its OWN behaviour rather than a number chosen by
+    hand. A jittery corner ROI earns a wide band; a rock-steady central one
+    earns a tight one, automatically.
+
+    `minimum_std` floors the spread: without it, an unusually stable ROI gets a
+    band so tight that a single noisy frame trips it.
+    """
+    return baseline_mean - sigma * max(baseline_std, minimum_std)
+
+
+def thresholds_from_config(screws, sigma, minimum_std):
+    """Per-ROI thresholds, preferring calibration and falling back to fixed.
+
+    Returns (thresholds, calibrated_count) so callers can tell the operator
+    whether they are running on measured bands or hand-set numbers.
+    """
+    thresholds = []
+    calibrated = 0
+
+    for screw in screws:
+        mean = screw.get("baseline_mean")
+        deviation = screw.get("baseline_std")
+
+        if mean is None or deviation is None:
+            thresholds.append(screw["similarity_threshold"])
+            continue
+
+        thresholds.append(
+            calibrated_threshold(mean, deviation, sigma, minimum_std)
+        )
+        calibrated += 1
+
+    return thresholds, calibrated

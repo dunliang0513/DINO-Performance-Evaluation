@@ -83,10 +83,19 @@ python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 Then set up a product and run detection:
 
 ```bash
+python tune_camera.py           # find the sharpest fixed focus, then set it
 python capture_reference.py     # SPACE saves a golden reference image, Q quits
 python select_screws.py         # click each screw, S saves, Q cancels
+python calibrate.py             # measure each ROI's normal range (board COMPLETE)
 python live_detection.py --model dinov2-small
 ```
+
+`calibrate.py` is not optional polish. Each ROI has a genuinely different
+normal range -- measured on a real board, a corner ROI drifted 0.740-0.911
+between frames while a central one held 0.950-0.974. A defect scored 0.745.
+No single threshold fits both: it would have to sit below 0.740 to spare the
+corner and above 0.745 to catch the defect. Calibration gives each ROI a band
+derived from its own measured behaviour, which separates them cleanly.
 
 `--model` accepts `dinov2-small`, `dinov2-base`, `dinov3-small` or
 `dinov3-base`; `--pooling` accepts `cls` or `mean`. Press Q to quit. Every
@@ -149,6 +158,8 @@ backends/               pluggable feature extractors (DINOv2, DINOv3)
 capture_reference.py    capture the golden reference image
 select_screws.py        click screw ROIs -> product_config.json
 live_detection.py       live detection, selectable DINO backend
+tune_camera.py          sweep for the sharpest fixed focus
+calibrate.py            learn each ROI's normal range from a good board
 tests/                  hardware-free test suite
 pytest.ini              pytest configuration
 docs/superpowers/       design spec and implementation plan

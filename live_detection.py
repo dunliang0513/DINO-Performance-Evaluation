@@ -16,7 +16,7 @@ from backends import AVAILABLE_MODELS, get_backend
 from camera_source import create_camera
 from registration import Registrar
 from roi import crop_square_with_padding
-from scoring import Debouncer, score_rois
+from scoring import Debouncer, score_rois, thresholds_from_config
 
 SMOOTHING = 0.1
 
@@ -98,7 +98,22 @@ def main():
 
     points = [tuple(screw["center"]) for screw in screws]
     sizes = [screw["crop_size"] for screw in screws]
-    thresholds = [screw["similarity_threshold"] for screw in screws]
+    thresholds, calibrated = thresholds_from_config(
+        screws, config.CALIBRATION_SIGMA, config.CALIBRATION_MIN_STD
+    )
+
+    if calibrated == len(screws):
+        print(f"Thresholds: calibrated per ROI from measured baselines")
+    elif calibrated:
+        print(
+            f"Thresholds: {calibrated}/{len(screws)} calibrated, the rest "
+            f"fixed. Re-run calibrate.py to cover them all."
+        )
+    else:
+        print(
+            "Thresholds: fixed values from the config. Run calibrate.py on a "
+            "complete board to derive per-ROI thresholds instead."
+        )
 
     registrar = Registrar(reference)
     backend = get_backend(arguments.model, device=arguments.device)

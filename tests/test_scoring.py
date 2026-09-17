@@ -127,3 +127,55 @@ def test_wrong_number_of_scores_raises():
     debouncer = Debouncer(thresholds=[0.75, 0.75], debounce_count=3)
     with pytest.raises(ValueError, match="2"):
         debouncer.update([0.9])
+
+
+# --- Calibration -----------------------------------------------------------
+
+from scoring import calibrated_threshold, thresholds_from_config
+
+
+def test_a_jittery_roi_earns_a_wider_band_than_a_steady_one():
+    """The whole point of calibrating instead of hand-picking.
+
+    Measured on a real board: a corner ROI ranged 0.740-0.911 (std 0.049)
+    while a central one held 0.950-0.974 (std 0.007). One global threshold
+    cannot fit both, so each must be judged against its own spread.
+    """
+    jittery = calibrated_threshold(0.847, 0.049, sigma=4.0, minimum_std=0.02)
+    steady = calibrated_threshold(0.963, 0.007, sigma=4.0, minimum_std=0.02)
+
+    assert jittery < steady, "the noisier ROI must get the more forgiving band"
+    assert jittery < 0.740, "must not flag the corner ROI's own worst frame"
+
+
+def test_minimum_std_stops_an_absurdly_tight_band():
+    """A near-zero spread would otherwise make one noisy frame a defect."""
+    without_floor = 0.99 - 4.0 * 0.001
+    with_floor = calibrated_threshold(0.99, 0.001, sigma=4.0, minimum_std=0.02)
+
+    assert with_floor < without_floor
+    assert with_floor == pytest.approx(0.99 - 4.0 * 0.02)
+
+
+def test_calibrated_baselines_are_preferred_over_fixed_thresholds():
+    screws = [
+        {"similarity_threshold": 0.75, "baseline_mean": 0.90,
+         "baseline_std": 0.02},
+    ]
+    thresholds, calibrated = thresholds_from_config(screws, 4.0, 0.02)
+
+    assert calibrated == 1
+    assert thresholds[0] == pytest.approx(0.90 - 4.0 * 0.02)
+
+
+def test_uncalibrated_rois_fall_back_to_their_fixed_threshold():
+    """Adding a 17th ROI must not silently break the 16 already calibrated."""
+    screws = [
+        {"similarity_threshold": 0.75, "baseline_mean": 0.90,
+         "baseline_std": 0.02},
+        {"similarity_threshold": 0.60},
+    ]
+    thresholds, calibrated = thresholds_from_config(screws, 4.0, 0.02)
+
+    assert calibrated == 1, "only one ROI has a baseline"
+    assert thresholds[1] == 0.60

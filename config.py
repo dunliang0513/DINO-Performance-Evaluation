@@ -69,6 +69,19 @@ RANSAC_REPROJECTION_THRESHOLD = _float("RANSAC_REPROJECTION_THRESHOLD", 5.0)
 # --- Detection --------------------------------------------------------------
 DETECTION_INTERVAL = _int("DETECTION_INTERVAL", 2)
 DEBOUNCE_COUNT = _int("DEBOUNCE_COUNT", 3)
+# Calibration replaces hand-picked thresholds. Each ROI has its own normal
+# range -- corner ROIs swing far more than central ones because homography
+# residual is worst at the edges. Measured on a real board: a corner ROI varied
+# 0.740-0.911 between frames (std 0.049) while a central one held 0.950-0.974
+# (std 0.007). One global threshold cannot fit both, so each ROI gets a band
+# derived from its own measured behaviour instead.
+CALIBRATION_FRAMES = _int("CALIBRATION_FRAMES", 30)
+# How many standard deviations below an ROI's own mean counts as a defect.
+CALIBRATION_SIGMA = _float("CALIBRATION_SIGMA", 4.0)
+# Floor on the measured spread. A very stable ROI would otherwise get an
+# impossibly tight band that a single noisy frame could trip.
+CALIBRATION_MIN_STD = _float("CALIBRATION_MIN_STD", 0.02)
+
 # The ROI crop must be tight enough that the component dominates it. At 80 px
 # on a 1080p board the screw is a small fraction of the crop, so removing it
 # barely changes the embedding: measured d-prime 0.54, i.e. not separable. At
