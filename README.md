@@ -32,23 +32,68 @@ repo sets out to quantify.
 
 ## Status
 
-**Work in progress — not yet runnable.** The design is settled and recorded in
-[the design spec](docs/superpowers/specs/2026-09-16-dinov2-v3-webcam-eval-design.md);
-implementation is proceeding in phases.
+**Live detection works.** You can run any of the four backbones against a USB
+webcam and watch per-ROI similarity scores in real time.
 
-Live detection runs on a USB webcam with any of the four backbones. The
-evaluation harness — labelled dataset capture, accuracy scoring and latency
-benchmarking — is not built yet.
+**The evaluation harness does not exist yet** — labelled dataset capture,
+accuracy scoring and latency benchmarking are the next phase. Until then this
+repo demonstrates the pipeline but does not yet answer the question it was built
+to answer. The design is recorded in
+[the design spec](docs/superpowers/specs/2026-09-16-dinov2-v3-webcam-eval-design.md),
+and the phase breakdown in
+[the implementation plan](docs/superpowers/plans/2026-09-16-foundation-and-backends.md).
 
-- `product_config.json` and the reference image are not committed; they are
-  generated per-setup by `select_screws.py` and `capture_reference.py`.
-- There is no accuracy measurement yet. Adding one is the point of this work.
-- The prebuilt TensorRT engine in the original prototype was compiled for a
-  Jetson Orin Nano and will not load on other GPUs, so it is excluded from git.
-  A TensorRT backend slots into `backends/` when the Orin work begins.
+Notes:
 
-The evaluation harness, the labelled-dataset capture tool and USB webcam support
-are being added. See the spec for the phase breakdown.
+- `product_config.json` and the reference image are generated per setup by
+  `capture_reference.py` and `select_screws.py`, and are not committed — they are
+  specific to one camera, rig and product.
+- The prebuilt TensorRT engine from the original Jetson prototype will not load
+  on other GPUs, so it is excluded from git. A TensorRT backend slots into
+  `backends/` when the Orin work begins.
+
+## Getting started
+
+Requires Python 3.10, an NVIDIA GPU with CUDA 12.8, and a USB webcam.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Verify the install found CUDA:
+
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+Then set up a product and run detection:
+
+```bash
+python capture_reference.py     # SPACE saves a golden reference image, Q quits
+python select_screws.py         # click each screw, S saves, Q cancels
+python live_detection.py --model dinov2-small
+```
+
+`--model` accepts `dinov2-small`, `dinov2-base`, `dinov3-small` or
+`dinov3-base`; `--pooling` accepts `cls` or `mean`. Press Q to quit. Every
+setting in [`config.py`](config.py) can also be overridden by an environment
+variable of the same name, so no script needs editing to change camera or
+threshold:
+
+```bash
+USB_CAMERA_INDEX=2 MATCH_SCALE=0.5 python live_detection.py --model dinov3-small
+```
+
+### Tests
+
+The suite runs without a camera or a GPU:
+
+```bash
+python -m pytest tests/ -m "not download"   # fast, no model downloads
+python -m pytest tests/                      # also downloads the four backbones
+```
 
 ## Models under evaluation
 
@@ -83,6 +128,7 @@ will always be reported with the device stated.
 ## Repository layout
 
 ```
+requirements.txt        pinned dependencies (CUDA 12.8, Python 3.10)
 config.py               single source of truth for runtime settings
 camera_source.py        camera abstraction (Basler + USB webcam)
 roi.py                  square ROI extraction with border padding
@@ -92,6 +138,7 @@ capture_reference.py    capture the golden reference image
 select_screws.py        click screw ROIs -> product_config.json
 live_detection.py       live detection, selectable DINO backend
 tests/                  hardware-free test suite
+pytest.ini              pytest configuration
 docs/superpowers/       design spec and implementation plan
 ```
 

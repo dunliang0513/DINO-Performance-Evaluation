@@ -40,8 +40,28 @@ def smooth(previous, current):
 
 
 def synchronise(device):
-    if device == "cuda" and torch.cuda.is_available():
+    """Block until queued CUDA work has finished.
+
+    Compares the resolved device *type*, not the raw string: `--device cuda:0`
+    is a natural thing to type on a multi-GPU box, and an exact `== "cuda"`
+    test would silently skip every sync and leave the timers measuring kernel
+    launch instead of execution.
+    """
+    if _is_cuda(device) and torch.cuda.is_available():
         torch.cuda.synchronize()
+
+
+def _is_cuda(device):
+    """True when `device` names a CUDA device, however it is spelled.
+
+    torch.device rejects "CUDA" outright and treats "cuda:0" as distinct from
+    "cuda", so the string is normalised first. Anything unparseable is treated
+    as not-CUDA rather than raising from inside the capture loop.
+    """
+    try:
+        return torch.device(str(device).strip().lower()).type == "cuda"
+    except (RuntimeError, ValueError):
+        return False
 
 
 def load_product():
@@ -139,15 +159,26 @@ def main():
                         homography = None
                         inlier_count = 0
 
-            registration_ms = smooth(
-                registration_ms,
-                (time.perf_counter() - registration_start) * 1000,
-            )
+                # Only sample frames that actually registered. Folding in the
+                # ~0 ms non-registration frames would average the cost down by
+                # REGISTRATION_INTERVAL and make DINO look like the bottleneck
+                # when registration dominates.
+                registration_ms = smooth(
+                    registration_ms,
+                    (time.perf_counter() - registration_start) * 1000,
+                )
 
             if homography is None:
                 display = frame.copy()
                 status = "Registration failed"
                 status_colour = (0, 0, 255)
+                # Without this, a board swapped while registration is down keeps
+                # showing the previous board's verdict for up to
+                # DEBOUNCE_COUNT * DETECTION_INTERVAL frames after re-acquiring.
+                scores = [None] * len(points)
+                states = ["UNKNOWN"] * len(points)
+                low_counts = [0] * len(points)
+                high_counts = [0] * len(points)
             else:
                 aligned = registrar.warp(frame, homography)
                 display = aligned.copy()

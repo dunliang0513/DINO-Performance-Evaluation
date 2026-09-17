@@ -1,64 +1,12 @@
 import json
 import cv2
-from camera_source import create_camera
 import config
 
 CONFIG_PATH = config.CONFIG_PATH
 REFERENCE_PATH = config.REFERENCE_PATH
-CAPTURE_NEW_REFERENCE = False
 DEFAULT_CROP_SIZE = config.DEFAULT_CROP_SIZE
 DEFAULT_SIMILARITY_THRESHOLD = config.DEFAULT_SIMILARITY_THRESHOLD
 
-
-def capture_reference():
-    camera = create_camera()
-
-    print(f"Using camera: {camera.name}")
-    print("Press SPACE to save the reference image or Q to cancel.")
-
-    saved = False
-
-    try:
-        while True:
-            ok, frame = camera.read()
-
-            if not ok:
-                continue
-
-            height, width = frame.shape[:2]
-            preview_scale = min(
-                1280 / width,
-                800 / height,
-                1.0
-            )
-            preview_width = int(width * preview_scale)
-            preview_height = int(height * preview_scale)
-            preview = cv2.resize(
-                frame,
-                (preview_width, preview_height)
-            )
-
-            cv2.imshow("Capture Reference", preview)
-            key = cv2.waitKey(1) & 0xFF
-
-            if key == ord(" "):
-                cv2.imwrite(REFERENCE_PATH, frame)
-                print(f"Saved reference image: {REFERENCE_PATH}")
-                saved = True
-                break
-
-            if key == ord("q"):
-                break
-    finally:
-        camera.release()
-        cv2.destroyAllWindows()
-
-    if not saved:
-        raise RuntimeError("Reference capture was cancelled.")
-
-
-if CAPTURE_NEW_REFERENCE:
-    capture_reference()
 
 original_image = cv2.imread(REFERENCE_PATH)
 

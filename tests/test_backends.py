@@ -126,3 +126,72 @@ def test_identical_crops_are_maximally_similar(synthetic_board):
     similarity = float(features[0] @ features[1])
 
     assert similarity > 0.999
+
+
+# --- Production-path tests -------------------------------------------------
+# Everything above runs on CPU in float32 for determinism, but the shipped
+# defaults are DEVICE=cuda and USE_FP16=True. Two silent-corruption bugs
+# survive the CPU-only tests, so they are pinned here against the real
+# configuration.
+
+requires_cuda = pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="needs a CUDA device"
+)
+
+
+@pytest.mark.download
+@requires_cuda
+def test_fp16_forward_still_yields_float32_unit_norm():
+    """Guards the `.float()` cast before normalisation.
+
+    The forward pass runs in fp16, but normalising in fp16 loses precision
+    near unit length. With the cast removed the norms drift far enough to
+    matter against a 0.75 similarity threshold, yet no CPU test notices
+    because use_fp16=False makes the cast a no-op there.
+    """
+    from backends import get_backend
+
+    backend = get_backend("dinov2-small", device="cuda", use_fp16=True)
+    rng = np.random.default_rng(11)
+    crops = [rng.integers(0, 255, (80, 80, 3), dtype=np.uint8) for _ in range(4)]
+
+    features = backend.embed(crops, pooling="cls")
+
+    assert features.dtype == np.float32
+    norms = np.linalg.norm(features, axis=1)
+    # fp32 normalisation lands within ~1e-6; fp16 normalisation is ~100x worse.
+    assert np.allclose(norms, 1.0, atol=1e-5), f"norms drifted: {norms}"
+
+
+@pytest.mark.download
+@pytest.mark.parametrize("model_name", ["dinov2-small", "dinov3-small"])
+def test_crops_are_converted_from_bgr_to_rgb(model_name):
+    """Guards the cv2.COLOR_BGR2RGB conversion.
+
+    OpenCV hands us BGR; both backbones expect RGB. Dropping the conversion
+    degrades every embedding identically on both sides of the comparison, so
+    nothing downstream crashes or looks wrong -- it would just quietly
+    invalidate the DINOv2-vs-DINOv3 accuracy numbers this repo exists to
+    produce. Asserted on the preprocessed tensor rather than the embedding,
+    because that is where the ordering is observable.
+    """
+    from backends import get_backend
+
+    backend = get_backend(model_name, device="cpu", use_fp16=False)
+
+    # Strongly blue-dominant in BGR: channel 0 is B=230, channel 2 is R=10.
+    crop = np.zeros((80, 80, 3), dtype=np.uint8)
+    crop[:, :, 0] = 230
+    crop[:, :, 1] = 40
+    crop[:, :, 2] = 10
+
+    pixel_values = backend._to_pixel_values([crop])
+
+    red_channel = float(pixel_values[0, 0].mean())
+    blue_channel = float(pixel_values[0, 2].mean())
+
+    assert red_channel < blue_channel, (
+        f"{model_name}: expected the RGB red channel ({red_channel:.3f}) to be "
+        f"darker than blue ({blue_channel:.3f}) for a blue-dominant BGR crop; "
+        f"BGR->RGB conversion is probably missing"
+    )

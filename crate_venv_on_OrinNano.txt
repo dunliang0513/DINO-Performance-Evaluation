@@ -1,3 +1,13 @@
+# ORIGINAL JETSON ORIN NANO SETUP NOTES - HISTORICAL
+#
+# These are the aarch64/Jetson pins from the original prototype. They are kept
+# for the eventual Orin deployment phase and are NOT the versions used on x86.
+# For x86 with CUDA 12.8, requirements.txt is authoritative - it pins newer
+# versions (torch 2.9.1+cu128, transformers 5.17.0) and holds scikit-learn and
+# matplotlib below their latest releases because this machine has Python 3.10.
+#
+# Do not pip install from this file on a workstation.
+
 # TensorRT 10.3.0 already installed
 
 python3 -m venv --system-site-packages ~/SIFT_DINO/venv/dino_cmp
