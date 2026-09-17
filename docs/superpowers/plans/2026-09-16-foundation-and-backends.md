@@ -56,7 +56,11 @@ python -m pip install --upgrade pip
 
 - [ ] **Step 2: Write `requirements.txt`**
 
-All versions below were confirmed to exist for cp310/linux_x86_64 on 2026-09-16.
+This machine has **only Python 3.10.12**, so every pin must satisfy
+`Requires-Python` for cp310 — existing on PyPI is not sufficient. scikit-learn
+and matplotlib are both held well below their latest releases for exactly this
+reason (1.8+ and 3.11+ respectively require Python >= 3.11).
+
 OpenCV is held at 4.x deliberately: 5.x is newly released and changes enough of
 the API surface that the SIFT/FLANN code here is not worth re-validating now.
 
@@ -74,8 +78,8 @@ numpy==2.2.6
 Pillow>=10,<13
 
 # Used by the evaluation plan (phases 5-6); installed now to avoid a second pass
-scikit-learn==1.9.1
-matplotlib==3.11.2
+scikit-learn==1.7.2
+matplotlib==3.10.9
 
 pytest==9.1.1
 ```
