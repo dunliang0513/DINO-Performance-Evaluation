@@ -36,17 +36,16 @@ repo sets out to quantify.
 [the design spec](docs/superpowers/specs/2026-09-16-dinov2-v3-webcam-eval-design.md);
 implementation is proceeding in phases.
 
-What is here today is the original Basler-camera prototype, which does **not**
-run as-is. Known gaps:
+Live detection runs on a USB webcam with any of the four backbones. The
+evaluation harness — labelled dataset capture, accuracy scoring and latency
+benchmarking — is not built yet.
 
-- `trt_feature_extractor.py` is imported by `live_detection_trt.py` but is
-  missing from the repo, so that script cannot start.
-- The prebuilt TensorRT engine was compiled for a Jetson Orin Nano and will not
-  load on other GPUs — TensorRT engines are not portable across architecture or
-  version. It is excluded from git.
 - `product_config.json` and the reference image are not committed; they are
-  generated per-setup.
+  generated per-setup by `select_screws.py` and `capture_reference.py`.
 - There is no accuracy measurement yet. Adding one is the point of this work.
+- The prebuilt TensorRT engine in the original prototype was compiled for a
+  Jetson Orin Nano and will not load on other GPUs, so it is excluded from git.
+  A TensorRT backend slots into `backends/` when the Orin work begins.
 
 The evaluation harness, the labelled-dataset capture tool and USB webcam support
 are being added. See the spec for the phase breakdown.
@@ -84,11 +83,16 @@ will always be reported with the device stated.
 ## Repository layout
 
 ```
+config.py               single source of truth for runtime settings
 camera_source.py        camera abstraction (Basler + USB webcam)
+roi.py                  square ROI extraction with border padding
+registration.py         SIFT/RANSAC homography registration
+backends/               pluggable feature extractors (DINOv2, DINOv3)
 capture_reference.py    capture the golden reference image
 select_screws.py        click screw ROIs -> product_config.json
-live_detection_trt.py   original Orin/TensorRT live demo (currently broken)
-docs/superpowers/specs/ design documents
+live_detection.py       live detection, selectable DINO backend
+tests/                  hardware-free test suite
+docs/superpowers/       design spec and implementation plan
 ```
 
 ## Licence
