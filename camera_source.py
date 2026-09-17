@@ -1,18 +1,45 @@
 import cv2
 
+import config
+
 
 class UsbCamera:
-    def __init__(self, index, width, height):
+    """USB / UVC webcam via OpenCV.
+
+    Requests MJPG explicitly: many UVC webcams only offer 1080p at a usable
+    frame rate in MJPG, falling back to roughly 5 fps on raw YUYV. Silently
+    accepting that would distort every latency measurement taken downstream.
+    """
+
+    def __init__(self, index, width, height, warmup_frames=5):
         self.camera = cv2.VideoCapture(index)
-        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
         if not self.camera.isOpened():
             raise RuntimeError(
-                f"Could not open USB camera index {index}."
+                f"Could not open USB camera index {index}. "
+                f"Check `ls /dev/video*` and `v4l2-ctl --list-devices`."
             )
 
-        self.name = f"USB camera {index}"
+        self.camera.set(
+            cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc("M", "J", "P", "G")
+        )
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+        self.width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        if (self.width, self.height) != (width, height):
+            print(
+                f"Warning: requested {width}x{height} but the camera granted "
+                f"{self.width}x{self.height}."
+            )
+
+        # Discard the first frames while auto-exposure and white balance settle.
+        for _ in range(warmup_frames):
+            self.camera.read()
+
+        self.name = f"USB camera {index} ({self.width}x{self.height})"
 
     def read(self):
         return self.camera.read()
@@ -176,34 +203,47 @@ class RotatedCamera:
 
 
 def create_camera(
-    backend,
-    usb_index=0,
-    usb_width=1920,
-    usb_height=1080,
-    basler_serial="",
-    basler_timeout_ms=2000,
+    backend=None,
+    usb_index=None,
+    usb_width=None,
+    usb_height=None,
+    basler_serial=None,
+    basler_timeout_ms=None,
     basler_width=None,
     basler_height=None,
-    rotate_180=False
+    rotate_180=None,
 ):
+    backend = config.CAMERA_BACKEND if backend is None else backend
+    usb_index = config.USB_CAMERA_INDEX if usb_index is None else usb_index
+    usb_width = config.FRAME_WIDTH if usb_width is None else usb_width
+    usb_height = config.FRAME_HEIGHT if usb_height is None else usb_height
+    basler_serial = (
+        config.BASLER_SERIAL if basler_serial is None else basler_serial
+    )
+    basler_timeout_ms = (
+        config.BASLER_TIMEOUT_MS if basler_timeout_ms is None
+        else basler_timeout_ms
+    )
+    basler_width = config.FRAME_WIDTH if basler_width is None else basler_width
+    basler_height = (
+        config.FRAME_HEIGHT if basler_height is None else basler_height
+    )
+    rotate_180 = config.ROTATE_180 if rotate_180 is None else rotate_180
+
     normalized_backend = backend.strip().lower()
 
     if normalized_backend == "usb":
-        camera = UsbCamera(
-            usb_index,
-            usb_width,
-            usb_height
-        )
+        camera = UsbCamera(usb_index, usb_width, usb_height)
     elif normalized_backend == "basler":
         camera = BaslerCamera(
             serial_number=basler_serial,
             timeout_ms=basler_timeout_ms,
             width=basler_width,
-            height=basler_height
+            height=basler_height,
         )
     else:
         raise ValueError(
-            "CAMERA_BACKEND must be either 'basler' or 'usb'."
+            f"CAMERA_BACKEND must be 'basler' or 'usb', got {backend!r}."
         )
 
     if rotate_180:
